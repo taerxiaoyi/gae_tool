@@ -14,7 +14,6 @@ PACKAGE_VERSION="v1.2.0"
 
 DATE_TIME=$(date +"%Y%m%d%H%M%S")
 DATE_DAY=$(date +"%Y%m%d")
-REMOTE_NAME="policy_deploy_pack_${DATE_TIME}"
 
 ##############################################################################
 # 设备配置
@@ -154,6 +153,7 @@ REMOTE_USER="${REMOTE_USER_MAP[$DEVICE_ID]}"
 REMOTE_PASS="${REMOTE_PASS_MAP[$DEVICE_ID]}"
 TARGET_FOLDER="${TARGET_FOLDER_MAP[$DEVICE_ID]}"
 ROBOT_TYPE="${ROBOT_TYPE_MAP[$DEVICE_ID]}"
+REMOTE_NAME="policy_deploy_pack_${ROBOT_TYPE}_${DATE_TIME}"
 
 # 防止忘记替换示例 IP。
 if [[ "$IP" == *"xxx"* ]]; then
@@ -233,6 +233,7 @@ echo "设备地址   : ${IP}"
 echo "远端用户   : ${REMOTE_USER}"
 echo "机器人类型 : ${ROBOT_TYPE}"
 echo "TASK       : ${TASK_NAME}"
+echo "远程文件名 : ${REMOTE_NAME}"
 echo "资源目录   : ${REMOTE_RESOURCE_DIR}"
 echo "输出目录   : ${OUTPUT_DIR}"
 echo "===================================================="
