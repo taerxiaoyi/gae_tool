@@ -9,7 +9,7 @@ set -o pipefail
 
 SRC_DIR="policy_deploy"
 
-REMOTE_PACKAGE_ROOT = "~/code/mc"
+REMOTE_PACKAGE_ROOT="~/code/mc"
 
 PACKAGE_ROOT="$HOME/Mc/robot_file/GAE_release/webctrl_packages"
 PACKAGE_VERSION="v1.2.0"
@@ -236,14 +236,6 @@ echo "资源目录   : ${REMOTE_RESOURCE_DIR}"
 echo "远端配置   : ${REMOTE_RUNTIME_CONF}"
 echo "输出目录   : ${OUTPUT_DIR}"
 echo "===================================================="
-
-##############################################################################
-# 本地源码保持不变
-##############################################################################
-
-echo ""
-echo "[LOCAL] 不修改本地源码目录：${SRC_DIR}"
-echo "[LOCAL] 目录清理和 TASK 修改将在上传完成后于远端执行"
 
 ##############################################################################
 # 远端临时目录清理
