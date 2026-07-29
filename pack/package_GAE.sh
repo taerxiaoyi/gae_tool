@@ -89,11 +89,11 @@ show_devices()
     local device_id
 
     echo "已添加的设备信息："
-    printf "  %-6s %-30s %-17s %-12s %s\\n" \
+    printf "  %-6s %-27s %-15s %-14s %s\\n" \
         "编号" "设备环境" "IP" "远端用户" "机器人类型"
 
     for device_id in "${DEVICE_IDS[@]}"; do
-        printf "  %-6s %-30s %-17s %-12s %s\\n" \
+        printf "  %-4s %-23s %-15s %-10s %s\\n" \
             "$device_id" \
             "${DEVICE_DESC_MAP[$device_id]}" \
             "${IP_MAP[$device_id]}" \
