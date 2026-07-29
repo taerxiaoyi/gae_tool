@@ -9,6 +9,8 @@ set -o pipefail
 
 SRC_DIR="policy_deploy"
 
+REMOTE_PACKAGE_ROOT = "~/code/mc"
+
 PACKAGE_ROOT="$HOME/Mc/robot_file/GAE_release/webctrl_packages"
 PACKAGE_VERSION="v1.2.0"
 
@@ -190,17 +192,17 @@ case "$ROBOT_TYPE" in
         ;;
 esac
 
-REMOTE_RESOURCE_DIR="~/code/mc/resources_pack/${RESOURCE_PACK_NAME}/resources"
+REMOTE_RESOURCE_DIR="${REMOTE_PACKAGE_ROOT}/resources_pack/${RESOURCE_PACK_NAME}/resources"
 
 RELEASE_DIR="${PACKAGE_ROOT}/encry_without_shell_${PACKAGE_VERSION}_${DATE_DAY}"
 OUTPUT_DIR="${RELEASE_DIR}/${TARGET_FOLDER}"
-RUNTIME_CONF="${SRC_DIR}/setup/etc/runtime.conf"
+REMOTE_RUNTIME_CONF="${REMOTE_PACKAGE_ROOT}/${REMOTE_NAME}/setup/etc/runtime.conf"
 
 ##############################################################################
 # 基础检查
 ##############################################################################
 
-for command_name in sshpass scp ssh expect sed grep; do
+for command_name in sshpass scp ssh expect; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
         echo "错误：未找到命令 ${command_name}"
         exit 1
@@ -212,10 +214,6 @@ if [ ! -d "$SRC_DIR" ]; then
     exit 1
 fi
 
-if [ ! -f "$RUNTIME_CONF" ]; then
-    echo "错误：配置文件不存在：${RUNTIME_CONF}"
-    exit 1
-fi
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -235,52 +233,17 @@ echo "机器人类型 : ${ROBOT_TYPE}"
 echo "TASK       : ${TASK_NAME}"
 echo "远程文件名 : ${REMOTE_NAME}"
 echo "资源目录   : ${REMOTE_RESOURCE_DIR}"
+echo "远端配置   : ${REMOTE_RUNTIME_CONF}"
 echo "输出目录   : ${OUTPUT_DIR}"
 echo "===================================================="
 
 ##############################################################################
-# 上传前清理本地源码目录
+# 本地源码保持不变
 ##############################################################################
 
 echo ""
-echo "[LOCAL] 清理 ${SRC_DIR} 中的构建目录..."
-
-LOCAL_CLEAN_DIRS=(build install resources log packages)
-
-for dir_name in "${LOCAL_CLEAN_DIRS[@]}"; do
-    dir_path="${SRC_DIR}/${dir_name}"
-
-    if [ -e "$dir_path" ] || [ -L "$dir_path" ]; then
-        echo "[LOCAL] 删除：${dir_path}"
-        if ! rm -rf -- "$dir_path"; then
-            echo "错误：删除失败：${dir_path}"
-            exit 1
-        fi
-    else
-        echo "[LOCAL] 不存在，跳过：${dir_path}"
-    fi
-done
-
-##############################################################################
-# 上传前修改 runtime.conf
-##############################################################################
-
-echo ""
-echo "[LOCAL] 设置 runtime.conf：TASK=${TASK_NAME}"
-
-if grep -qE '^[[:space:]]*TASK=' "$RUNTIME_CONF"; then
-    if ! sed -i -E "s|^[[:space:]]*TASK=.*$|TASK=${TASK_NAME}|" "$RUNTIME_CONF"; then
-        echo "错误：修改 ${RUNTIME_CONF} 失败"
-        exit 1
-    fi
-else
-    if ! printf '\nTASK=%s\n' "$TASK_NAME" >> "$RUNTIME_CONF"; then
-        echo "错误：写入 ${RUNTIME_CONF} 失败"
-        exit 1
-    fi
-fi
-
-echo "[LOCAL] 当前配置：$(grep -E '^[[:space:]]*TASK=' "$RUNTIME_CONF" | tail -n 1)"
+echo "[LOCAL] 不修改本地源码目录：${SRC_DIR}"
+echo "[LOCAL] 目录清理和 TASK 修改将在上传完成后于远端执行"
 
 ##############################################################################
 # 远端临时目录清理
@@ -295,19 +258,19 @@ cleanup_remote()
     fi
 
     echo ""
-    echo "[${IP}] 删除远端临时目录：~/code/mc/${REMOTE_NAME}"
+    echo "[${IP}] 删除远端临时目录：${REMOTE_PACKAGE_ROOT}/${REMOTE_NAME}"
 
     if sshpass -p "$REMOTE_PASS" \
         ssh \
         -o StrictHostKeyChecking=no \
         "${REMOTE_USER}@${IP}" \
-        "rm -rf ~/code/mc/${REMOTE_NAME}"; then
+        "rm -rf ${REMOTE_PACKAGE_ROOT}/${REMOTE_NAME}"; then
         REMOTE_UPLOADED=0
         echo "[${IP}] 远端临时目录已删除"
         return 0
     fi
 
-    echo "[${IP}] 警告：远端临时目录删除失败，请手动删除：~/code/mc/${REMOTE_NAME}" >&2
+    echo "[${IP}] 警告：远端临时目录删除失败，请手动删除：${REMOTE_PACKAGE_ROOT}/${REMOTE_NAME}" >&2
     return 1
 }
 
@@ -327,7 +290,7 @@ if ! sshpass -p "$REMOTE_PASS" \
     ssh \
     -o StrictHostKeyChecking=no \
     "${REMOTE_USER}@${IP}" \
-    "mkdir -p ~/code/mc && rm -rf ~/code/mc/${REMOTE_NAME}"; then
+    "mkdir -p ${REMOTE_PACKAGE_ROOT} && rm -rf ${REMOTE_PACKAGE_ROOT}/${REMOTE_NAME}"; then
     echo "[${IP}] 远端目录准备失败"
     exit 1
 fi
@@ -340,8 +303,46 @@ if ! sshpass -p "$REMOTE_PASS" \
     scp -r \
     -o StrictHostKeyChecking=no \
     "$SRC_DIR" \
-    "${REMOTE_USER}@${IP}:~/code/mc/${REMOTE_NAME}"; then
+    "${REMOTE_USER}@${IP}:${REMOTE_PACKAGE_ROOT}/${REMOTE_NAME}"; then
     echo "[${IP}] 上传失败"
+    exit 1
+fi
+
+##############################################################################
+# 上传完成后整理远端工程
+##############################################################################
+
+echo "[${IP}] 清理远端工程并设置 TASK=${TASK_NAME}..."
+
+if ! sshpass -p "$REMOTE_PASS" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    "${REMOTE_USER}@${IP}" \
+    "REMOTE_DIR=${REMOTE_PACKAGE_ROOT}/${REMOTE_NAME}; \
+     RUNTIME_CONF=\"\${REMOTE_DIR}/setup/etc/runtime.conf\"; \
+     if [ ! -d \"\${REMOTE_DIR}\" ]; then \
+         echo \"错误：远端工程目录不存在：\${REMOTE_DIR}\"; exit 1; \
+     fi; \
+     for dir_name in build install resources log packages; do \
+         dir_path=\"\${REMOTE_DIR}/\${dir_name}\"; \
+         if [ -e \"\${dir_path}\" ] || [ -L \"\${dir_path}\" ]; then \
+             echo \"[REMOTE] 删除：\${dir_path}\"; \
+             rm -rf -- \"\${dir_path}\" || exit 1; \
+         else \
+             echo \"[REMOTE] 不存在，跳过：\${dir_path}\"; \
+         fi; \
+     done; \
+     if [ ! -f \"\${RUNTIME_CONF}\" ]; then \
+         echo \"错误：远端配置文件不存在：\${RUNTIME_CONF}\"; exit 1; \
+     fi; \
+     if grep -qE '^[[:space:]]*TASK=' \"\${RUNTIME_CONF}\"; then \
+         sed -i -E 's|^[[:space:]]*TASK=.*$|TASK=${TASK_NAME}|' \"\${RUNTIME_CONF}\" || exit 1; \
+     else \
+         printf '\\nTASK=%s\\n' '${TASK_NAME}' >> \"\${RUNTIME_CONF}\" || exit 1; \
+     fi; \
+     echo '[REMOTE] 当前配置：'; \
+     grep -E '^[[:space:]]*TASK=' \"\${RUNTIME_CONF}\" | tail -n 1"; then
+    echo "[${IP}] 远端工程整理失败"
     exit 1
 fi
 
@@ -363,10 +364,10 @@ expect "\\$ "
 send "export PS1='EXPECT_PROMPT>'\r"
 
 expect "EXPECT_PROMPT>"
-send "cp -r ${REMOTE_RESOURCE_DIR} ~/code/mc/${REMOTE_NAME}/\r"
+send "cp -r ${REMOTE_RESOURCE_DIR} ${REMOTE_PACKAGE_ROOT}/${REMOTE_NAME}/\r"
 
 expect "EXPECT_PROMPT>"
-send "cd ~/code/mc/${REMOTE_NAME}\r"
+send "cd ${REMOTE_PACKAGE_ROOT}/${REMOTE_NAME}\r"
 
 expect "EXPECT_PROMPT>"
 send "./build_and_install.sh\r"
@@ -410,7 +411,7 @@ echo "[${IP}] 下载 packages..."
 if ! sshpass -p "$REMOTE_PASS" \
     scp -r \
     -o StrictHostKeyChecking=no \
-    "${REMOTE_USER}@${IP}:~/code/mc/${REMOTE_NAME}/packages/*" \
+    "${REMOTE_USER}@${IP}:${REMOTE_PACKAGE_ROOT}/${REMOTE_NAME}/packages/*" \
     "$OUTPUT_DIR/"; then
     echo "[${IP}] 下载 packages 失败"
     exit 1
