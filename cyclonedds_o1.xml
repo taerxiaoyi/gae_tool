@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS>
+<Domain Id="0">
+    <General>
+        <Interfaces>
+            <NetworkInterface name="enP8p1s0" priority="default" multicast="default"/>
+        </Interfaces>
+    </General>
+</Domain>
+<Domain Id="1">
+    <General>
+        <Interfaces>
+            <NetworkInterface name="wlP1p1s0" priority="default" multicast="default"/>
+        </Interfaces>
+    </General>
+</Domain>
+</CycloneDDS>
