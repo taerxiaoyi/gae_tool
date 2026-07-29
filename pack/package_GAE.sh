@@ -170,7 +170,7 @@ fi
 
 case "$ROBOT_TYPE" in
     unitree_g1)
-        TASK_NAME="g1_eman"
+        TASK_NAME="g1_stable_mocap"
         RESOURCE_PACK_NAME="unitree_g1"
         ;;
     wlrobot_o1)
