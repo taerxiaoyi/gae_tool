@@ -7,7 +7,7 @@ set -o pipefail
 # 公共配置
 ##############################################################################
 
-SRC_DIR="policy_deploy_pack"
+SRC_DIR="policy_deploy"
 
 PACKAGE_ROOT="$HOME/Mc/robot_file/GAE_release/webctrl_packages"
 PACKAGE_VERSION="v1.2.0"
@@ -17,36 +17,89 @@ DATE_DAY=$(date +"%Y%m%d")
 REMOTE_NAME="policy_deploy_pack_${DATE_TIME}"
 
 ##############################################################################
+# 设备配置
+#
+# 以后新增设备时，只需要在这里增加一行 add_device。
+#
+# 参数顺序：
+# add_device 编号 设备环境 IP 远端用户 密码 输出目录 机器人类型
+##############################################################################
+
+declare -a DEVICE_IDS=()
+declare -A DEVICE_DESC_MAP=()
+declare -A IP_MAP=()
+declare -A REMOTE_USER_MAP=()
+declare -A REMOTE_PASS_MAP=()
+declare -A TARGET_FOLDER_MAP=()
+declare -A ROBOT_TYPE_MAP=()
+
+add_device()
+{
+    local device_id="$1"
+    local device_desc="$2"
+    local ip="$3"
+    local remote_user="$4"
+    local remote_pass="$5"
+    local target_folder="$6"
+    local robot_type="$7"
+
+    # 防止编号重复。
+    if [[ -n "${IP_MAP[$device_id]+x}" ]]; then
+        echo "错误：设备编号重复：${device_id}" >&2
+        exit 1
+    fi
+
+    DEVICE_IDS+=("$device_id")
+    DEVICE_DESC_MAP["$device_id"]="$device_desc"
+    IP_MAP["$device_id"]="$ip"
+    REMOTE_USER_MAP["$device_id"]="$remote_user"
+    REMOTE_PASS_MAP["$device_id"]="$remote_pass"
+    TARGET_FOLDER_MAP["$device_id"]="$target_folder"
+    ROBOT_TYPE_MAP["$device_id"]="$robot_type"
+}
+
+# 在下面添加或修改设备。
+add_device "1" "Ubuntu22 CUDA12 TRT10" "192.168.2.229" "wlrobot" "123" \
+    "g1_webctrl_aarch64_ubuntu22_cuda12_trt10_${PACKAGE_VERSION}" "unitree_g1"
+
+add_device "2" "Ubuntu22 CUDA12 TRT10" "192.168.2.229" "wlrobot" "123" \
+    "o1_webctrl_aarch64_ubuntu22_cuda12_trt10_${PACKAGE_VERSION}" "wlrobot_o1"
+
+add_device "3" "Ubuntu22 CUDA12 TRT10" "192.168.2.229" "wlrobot" "123" \
+    "pm01_webctrl_aarch64_ubuntu22_cuda12_trt10_${PACKAGE_VERSION}" "engine_pm01"
+
+add_device "4" "Ubuntu22 CUDA12 TRT10" "192.168.2.229" "wlrobot" "123" \
+    "k2_webctrl_aarch64_ubuntu22_cuda12_trt10_${PACKAGE_VERSION}" "kepler_k2"
+
+add_device "5" "Ubuntu22 CUDA12 TRT8" "192.168.2.90" "wlrobot" "123" \
+    "g1_webctrl_aarch64_ubuntu22_cuda12_trt8_${PACKAGE_VERSION}" "unitree_g1"
+
+add_device "6" "Ubuntu20 CUDA11 TRT8" "192.168.3.77" "wlrobot" "123" \
+    "g1_webctrl_aarch64_ubuntu20_cuda11_trt8_${PACKAGE_VERSION}" "unitree_g1"
+
+add_device "7" "Ubuntu22 CUDA12 TRT10" "192.168.1.209" "mc" "3" \
+    "g1_webctrl_amd86_ubuntu22_cuda12_trt10_${PACKAGE_VERSION}" "unitree_g1"
+
+##############################################################################
 # 使用说明
 ##############################################################################
 
 show_devices()
 {
+    local device_id
+
     echo "已添加的设备信息："
-    printf "  %-4s %-29s %-17s %-12s %s
-" \
+    printf "  %-6s %-30s %-17s %-12s %s\\n" \
         "编号" "设备环境" "IP" "远端用户" "机器人类型"
-    printf "  %-4s %-29s %-17s %-12s %s
-" \
-        "1" "Ubuntu22 CUDA12 TRT10" "192.168.2.229" "wlrobot" "unitree_g1"
-    printf "  %-4s %-29s %-17s %-12s %s
-" \
-        "2" "Ubuntu22 CUDA12 TRT10" "192.168.2.229" "wlrobot" "wlrobot_o1"
-    printf "  %-4s %-29s %-17s %-12s %s
-" \
-        "3" "Ubuntu22 CUDA12 TRT10" "192.168.2.229" "wlrobot" "engine_pm01"
-    printf "  %-4s %-29s %-17s %-12s %s
-" \
-        "4" "Ubuntu22 CUDA12 TRT10" "192.168.2.229" "wlrobot" "kepler_k2"
-    printf "  %-4s %-29s %-17s %-12s %s
-" \
-        "5" "Ubuntu22 CUDA12 TRT8" "192.168.2.90" "wlrobot" "unitree_g1"
-    printf "  %-4s %-29s %-17s %-12s %s
-" \
-        "6" "Ubuntu20 CUDA11 TRT8" "192.168.2.xxx" "wlrobot" "unitree_g1"
-    printf "  %-4s %-29s %-17s %-12s %s
-" \
-        "7" "Ubuntu22 CUDA12 TRT10" "192.168.1.209" "mc" "unitree_g1"
+
+    for device_id in "${DEVICE_IDS[@]}"; do
+        printf "  %-6s %-30s %-17s %-12s %s\\n" \
+            "$device_id" \
+            "${DEVICE_DESC_MAP[$device_id]}" \
+            "${IP_MAP[$device_id]}" \
+            "${REMOTE_USER_MAP[$device_id]}" \
+            "${ROBOT_TYPE_MAP[$device_id]}"
+    done
 }
 
 show_usage()
@@ -59,7 +112,7 @@ show_usage()
     echo "  $0 1"
 }
 
-# 未传设备编号时，只列出当前脚本中已经添加的设备信息。
+# 未传设备编号时，从上面的设备配置自动生成列表。
 if [ "$#" -eq 0 ]; then
     show_devices
     echo ""
@@ -77,87 +130,30 @@ fi
 
 ##############################################################################
 # 根据编号选择一台设备
-# ROBOT_TYPE 可选：unitree_g1、wlrobot_o1、engine_pm01、kepler_k2
 ##############################################################################
 
 DEVICE_ID="$1"
 
 case "$DEVICE_ID" in
-    1)
-        DEVICE_DESC="Ubuntu22 CUDA12 TRT10"
-        IP="192.168.2.229"
-        REMOTE_USER="wlrobot"
-        REMOTE_PASS="123"
-        TARGET_FOLDER="g1_webctrl_aarch64_ubuntu22_cuda12_trt10_${PACKAGE_VERSION}"
-        ROBOT_TYPE="unitree_g1"
-        ;;
-        
-    2)
-        DEVICE_DESC="Ubuntu22 CUDA12 TRT10"
-        IP="192.168.2.229"
-        REMOTE_USER="wlrobot"
-        REMOTE_PASS="123"
-        TARGET_FOLDER="o1_webctrl_aarch64_ubuntu22_cuda12_trt10_${PACKAGE_VERSION}"
-        ROBOT_TYPE="wlrobot_o1"
-        ;;
-
-    3)
-        DEVICE_DESC="Ubuntu22 CUDA12 TRT10"
-        IP="192.168.2.229"
-        REMOTE_USER="wlrobot"
-        REMOTE_PASS="123"
-        TARGET_FOLDER="pm01_webctrl_aarch64_ubuntu22_cuda12_trt10_${PACKAGE_VERSION}"
-        ROBOT_TYPE="engine_pm01"
-        ;;
-
-    4)
-        DEVICE_DESC="Ubuntu22 CUDA12 TRT10"
-        IP="192.168.2.229"
-        REMOTE_USER="wlrobot"
-        REMOTE_PASS="123"
-        TARGET_FOLDER="k2_webctrl_aarch64_ubuntu22_cuda12_trt10_${PACKAGE_VERSION}"
-        ROBOT_TYPE="kepler_k2"
-        ;;
-
-    5)
-        DEVICE_DESC="Ubuntu22 CUDA12 TRT8"
-        IP="192.168.2.90"
-        REMOTE_USER="wlrobot"
-        REMOTE_PASS="123"
-        TARGET_FOLDER="g1_webctrl_aarch64_ubuntu22_cuda12_trt8_${PACKAGE_VERSION}"
-        ROBOT_TYPE="unitree_g1"
-        ;;
-
-    6)
-        DEVICE_DESC="Ubuntu20 CUDA11 TRT8"
-        IP="192.168.3.77"
-        REMOTE_USER="wlrobot"
-        REMOTE_PASS="123"
-        TARGET_FOLDER="g1_webctrl_aarch64_ubuntu20_cuda11_trt8_${PACKAGE_VERSION}"
-        ROBOT_TYPE="unitree_g1"
-        ;;
-
-    7)
-        DEVICE_DESC="Ubuntu22 CUDA12 TRT10"
-        IP="192.168.1.209"
-        REMOTE_USER="mc"
-        REMOTE_PASS="3"
-        TARGET_FOLDER="g1_webctrl_amd86_ubuntu22_cuda12_trt10_${PACKAGE_VERSION}"
-        ROBOT_TYPE="unitree_g1"
-        ;;
-
     -h|--help)
         show_usage
         exit 0
         ;;
-
-    *)
-        echo "错误：未知设备编号：${DEVICE_ID}"
-        echo ""
-        show_usage
-        exit 1
-        ;;
 esac
+
+if [[ -z "${IP_MAP[$DEVICE_ID]+x}" ]]; then
+    echo "错误：未知设备编号：${DEVICE_ID}"
+    echo ""
+    show_usage
+    exit 1
+fi
+
+DEVICE_DESC="${DEVICE_DESC_MAP[$DEVICE_ID]}"
+IP="${IP_MAP[$DEVICE_ID]}"
+REMOTE_USER="${REMOTE_USER_MAP[$DEVICE_ID]}"
+REMOTE_PASS="${REMOTE_PASS_MAP[$DEVICE_ID]}"
+TARGET_FOLDER="${TARGET_FOLDER_MAP[$DEVICE_ID]}"
+ROBOT_TYPE="${ROBOT_TYPE_MAP[$DEVICE_ID]}"
 
 # 防止忘记替换示例 IP。
 if [[ "$IP" == *"xxx"* ]]; then
